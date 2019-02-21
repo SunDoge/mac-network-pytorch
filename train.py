@@ -12,7 +12,7 @@ from tqdm import tqdm
 from dataset import CLEVR, collate_data, transform
 from model import MACNetwork
 
-batch_size = 64
+batch_size = 256
 n_epoch = 20
 dim = 512
 
@@ -28,7 +28,8 @@ def accumulate(model1, model2, decay=0.999):
 
 
 def train(epoch):
-    clevr = CLEVR(sys.argv[1], transform=transform)
+    # clevr = CLEVR(sys.argv[1], transform=transform)
+    clevr = CLEVR(transform=transform)
     train_set = DataLoader(
         clevr, batch_size=batch_size, num_workers=4, collate_fn=collate_data
     )
@@ -51,7 +52,8 @@ def train(epoch):
         loss.backward()
         optimizer.step()
         correct = output.detach().argmax(1) == answer
-        correct = torch.tensor(correct, dtype=torch.float32).sum() / batch_size
+        # correct = torch.tensor(correct, dtype=torch.float32).sum() / batch_size
+        correct = correct.float().sum() / batch_size
 
         if moving_loss == 0:
             moving_loss = correct
@@ -67,11 +69,12 @@ def train(epoch):
 
         accumulate(net_running, net)
 
-    clevr.close()
+    # clevr.close()
 
 
 def valid(epoch):
-    clevr = CLEVR(sys.argv[1], 'val', transform=None)
+    # clevr = CLEVR(sys.argv[1], 'val', transform=None)
+    clevr = CLEVR('val', transform=None)
     valid_set = DataLoader(
         clevr, batch_size=batch_size, num_workers=4, collate_fn=collate_data
     )
@@ -101,7 +104,7 @@ def valid(epoch):
         )
     )
 
-    clevr.close()
+    # clevr.close()
 
 
 if __name__ == '__main__':
@@ -113,6 +116,10 @@ if __name__ == '__main__':
 
     net = MACNetwork(n_words, dim).to(device)
     net_running = MACNetwork(n_words, dim).to(device)
+
+    net = nn.DataParallel(net)
+    net_running = nn.DataParallel(net_running)
+
     accumulate(net_running, net, 0)
 
     criterion = nn.CrossEntropyLoss()
@@ -125,4 +132,4 @@ if __name__ == '__main__':
         with open(
             'checkpoint/checkpoint_{}.model'.format(str(epoch + 1).zfill(2)), 'wb'
         ) as f:
-            torch.save(net_running.state_dict(), f)
+            torch.save(net_running.module.state_dict(), f)

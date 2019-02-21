@@ -10,20 +10,20 @@ import h5py
 
 from transforms import Scale
 
+
 class CLEVR(Dataset):
-    def __init__(self, root, split='train', transform=None):
+    def __init__(self, split='train', transform=None):
         with open(f'data/{split}.pkl', 'rb') as f:
             self.data = pickle.load(f)
 
         # self.transform = transform
-        self.root = root
         self.split = split
 
-        self.h = h5py.File('data/{}_features.hdf5'.format(split), 'r')
-        self.img = self.h['data']
+        # self.h = h5py.File('data/{}_features.hdf5'.format(split), 'r')
+        # self.img = self.h['data']
 
-    def close(self):
-        self.h.close()
+    # def close(self):
+    #     self.h.close()
 
     def __getitem__(self, index):
         imgfile, question, answer, family = self.data[index]
@@ -32,12 +32,17 @@ class CLEVR(Dataset):
 
         # img = self.transform(img)
         id = int(imgfile.rsplit('_', 1)[1][:-4])
-        img = torch.from_numpy(self.img[id])
 
-        return img, question, len(question), answer, family
+        # Multi reader
+        with h5py.File('data/{}_features.hdf5'.format(self.split), 'r') as h:
+            imgs = h['data']
+            img = torch.from_numpy(imgs[id])
+
+            return img, question, len(question), answer, family
 
     def __len__(self):
         return len(self.data)
+
 
 transform = transforms.Compose([
     Scale([224, 224]),
@@ -45,8 +50,9 @@ transform = transforms.Compose([
     transforms.RandomCrop([224, 224]),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                        std=[0.5, 0.5, 0.5])
+                         std=[0.5, 0.5, 0.5])
 ])
+
 
 def collate_data(batch):
     images, lengths, answers, families = [], [], [], []
@@ -66,5 +72,8 @@ def collate_data(batch):
         answers.append(answer)
         families.append(family)
 
+    lengths = torch.LongTensor(lengths)
+    families = torch.LongTensor(families)
+
     return torch.stack(images), torch.from_numpy(questions), \
-        lengths, torch.LongTensor(answers), families
+           lengths, torch.LongTensor(answers), families

@@ -203,6 +203,7 @@ class MACNetwork(nn.Module):
         embed = self.embed(question)
         embed = nn.utils.rnn.pack_padded_sequence(embed, question_len,
                                                 batch_first=True)
+        self.lstm.flatten_parameters()
         lstm_out, (h, _) = self.lstm(embed)
         lstm_out, _ = nn.utils.rnn.pad_packed_sequence(lstm_out,
                                                     batch_first=True)
